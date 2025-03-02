@@ -138,13 +138,18 @@ def calculate_and_display():
             shock_load_array[i] = cord_stretch_damped(drag_force_array[i], cord_length, cord_cross_sectional_area, cord_modulus_of_elasticity, 100, velocity_array[i])
 
         # Plot results
-        plt.figure(figsize=(10, 6))
-        plt.plot(time_array, shock_load_array, label='Shock Load on Shock Cord')
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
+
+        plt.plot(time_array, shock_load_array, color='xkcd:dark blue')
         plt.xlabel('Time (s)')
         plt.ylabel('Shock Load (N)')
-        plt.title('Shock Load on Shock Cord During Parachute Deployment')
-        plt.grid(True)
-        plt.legend()
+
+        # Add gridlines and ticks
+        ax.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.6)
+        ax.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
+        ax.minorticks_on()
+        ax.tick_params(which='both', direction='in', top=True, right=True)
+
         plt.show()
 
     except ValueError:
