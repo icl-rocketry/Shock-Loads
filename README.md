@@ -24,3 +24,4 @@ Application to simulate the shock load on a parachute's shock cord during deploy
 ### Notes
 - The simulation uses the International Standard Atmosphere (ISA) model to calculate air density.
 - The shock cord stretch is modelled using Hooke's Law with additional damping.
+- The disreefing of the parachute is approximated by a linear increase in diameter increase.
