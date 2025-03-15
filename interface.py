@@ -153,6 +153,45 @@ def simulate():
     except ValueError:
         messagebox.showerror("Invalid input", "Please enter valid numeric values for all fields.")
 
+def set_nimbus24_values():
+
+    entry_apogee.delete(0, tk.END)
+    entry_apogee.insert(0, "3000")
+
+    entry_mass.delete(0, tk.END)
+    entry_mass.insert(0, "55")
+
+    entry_parachute_mass.delete(0, tk.END)
+    entry_parachute_mass.insert(0, "1.0")
+
+    entry_deploy_delay.delete(0, tk.END)
+    entry_deploy_delay.insert(0, "10")
+
+    entry_t_reefed.delete(0, tk.END)
+    entry_t_reefed.insert(0, "0.5")
+
+    entry_t_disreef.delete(0, tk.END)
+    entry_t_disreef.insert(0, "1.0")
+
+    entry_Cd_chute.delete(0, tk.END)
+    entry_Cd_chute.insert(0, "2.2") # didn't disreef
+
+    entry_Cd_partial.delete(0, tk.END)
+    entry_Cd_partial.insert(0, "2.2")
+
+    entry_diameter_chute.delete(0, tk.END)
+    entry_diameter_chute.insert(0, "2.0") # didn't disreef
+
+    entry_diameter_partial.delete(0, tk.END)
+    entry_diameter_partial.insert(0, "2.0")
+
+    entry_k.delete(0, tk.END)
+    entry_k.insert(0, "500")
+
+    entry_L0.delete(0, tk.END)
+    entry_L0.insert(0, "10") # deployed late
+
+
 root = tk.Tk()
 root.title("Parachute Deployment Simulation")
 
@@ -196,5 +235,8 @@ entry_L0 = entry_vars["Unstretched Cord Length (m)"]
 
 calculate_button = ttk.Button(root, text="Simulate", command=simulate)
 calculate_button.grid(row=len(inputs), column=1, pady=10)
+
+nimbus24_button = ttk.Button(root, text="Nimbus24", command=set_nimbus24_values)
+nimbus24_button.grid(row=len(inputs)+1, column=1, pady=10)
 
 root.mainloop()
