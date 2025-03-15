@@ -3,210 +3,198 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import matplotlib.pyplot as plt
 
-# --- Calculation Functions ---
+def air_density(h):
+    t0 = 288.15
+    pho0 = 1.225
+    r = 287.058
+    P = 101325
+    lapse_rate = 0.0065
+    g = 9.81
 
-def air_density(altitude):
-    rho0 = 1.225  # Sea-level air density in kg/m^3
-    T0 = 288.15  # Sea-level standard temperature in K
-    Lapse_rate = 0.0065  # Temperature lapse rate in K/m
-    R = 287.05  # Specific gas constant for dry air in J/(kg·K)
-    g = 9.81  # m/s^2 (gravitational acceleration)
-    
-    T = T0 - Lapse_rate * altitude
-    P = rho0 * np.exp(-g * altitude / (R * T))
-    rho = P / (R * T)
-    return max(rho, 0)
+    T = t0 - lapse_rate * h
+    pressure = P * (T / t0) ** (g / (lapse_rate * r))
+    density = pressure / (r * T)
+    return density
 
-def terminal_velocity(mass, Cd, A, h=None, rho=None):
-    g = 9.81  # m/s^2 (gravitational acceleration)
-    if rho is None:
-        if h is None:
-            raise ValueError("Either 'h' or 'rho' must be provided")
-        rho = air_density(h)
-    return np.sqrt((2 * mass * g) / (rho * Cd * A))
-
-def drag_force(v, Cd, A, rho=None, h=None):
-    if rho is None:
-        if h is None:
-            raise ValueError("Either 'h' or 'rho' must be provided")
-        rho = air_density(h)
-    return 0.5 * rho * v**2 * Cd * A
-
-def cord_stretch_damped(force, length, cross_sectional_area, modulus_of_elasticity, damping_coefficient, velocity):
-    return (force * length) / (cross_sectional_area * modulus_of_elasticity) + damping_coefficient * velocity
-
-# --- UI Calculation Function ---
-
-def air_density_isa(altitude):
-    # Constants for the International Standard Atmosphere (ISA)
-    T0 = 288.15  # Sea-level standard temperature in K
-    P0 = 101325  # Sea-level standard pressure in Pa
-    L = 0.0065  # Temperature lapse rate in K/m
-    R = 287.05  # Specific gas constant for dry air in J/(kg·K)
-    g = 9.81  # m/s^2 (gravitational acceleration)
-    
-    if altitude < 11000:  # Troposphere
-        T = T0 - L * altitude
-        P = P0 * (T / T0) ** (g / (R * L))
-    else:  # Above Troposphere (simplified)
-        T = T0 - L * 11000
-        P = P0 * (T / T0) ** (g / (R * L)) * np.exp(-g * (altitude - 11000) / (R * T))
-    
-    rho = P / (R * T)
-    return max(rho, 0)
-
-def calculate_and_display():
+def simulate():
     try:
-        # Retrieve input values from UI
-        mass_initial = float(entry_mass.get())
-        horizontal_speed = float(entry_horizontal_speed.get())
-        parachute_diameter_full = float(entry_diameter_full.get())
-        reefed_diameter = float(entry_reefed_diameter.get())
-        drag_coefficient_full = float(entry_drag_full.get())
-        reefed_drag_coefficient = float(entry_drag_reefed.get())
-        reefed_duration = float(entry_reefed_duration.get())
-        reefed_deployment_time = float(entry_deployment_time.get())  # time to deploy reefed chute
-        full_deployment_time = float(entry_full_deployment_time.get())  # time to deploy full chute
-        cord_length = float(entry_cord_length.get())
-        cord_diameter = float(entry_cord_diameter.get())
-        cord_yield_strength = float(entry_cord_yield_strength.get())
-        cord_modulus_of_elasticity = float(entry_cord_modulus.get())
-        safety_factor = float(entry_safety_factor.get())
+        apogee = float(entry_apogee.get())
+        mass = float(entry_mass.get())
+        m_p = float(entry_parachute_mass.get())
+        deploy_delay = float(entry_deploy_delay.get())
+        t_reefed = float(entry_t_reefed.get())
+        t_disreef = float(entry_t_disreef.get())
+        dt = float(entry_dt.get())
+        Cd_chute = float(entry_Cd_chute.get())
+        Cd_partial = float(entry_Cd_partial.get())
+        A_chute = np.pi * (float(entry_diameter_chute.get()) / 2) ** 2
+        A_partial = np.pi * (float(entry_diameter_partial.get()) / 2) ** 2
+        k = float(entry_k.get())
+        L0 = float(entry_L0.get())
 
-        # Calculate areas from diameters
-        parachute_area_full = np.pi * (parachute_diameter_full / 2) ** 2
-        reefed_area = np.pi * (reefed_diameter / 2) ** 2
-
-        # Constants
+        rho = air_density(apogee)
         g = 9.81
-        cord_cross_sectional_area = np.pi * (cord_diameter / 2) ** 2
 
-        # Simulation parameters
-        time_step = 0.0001  # Time step for simulation in seconds
-        total_time = 20  # Total simulation time in seconds
+        time_list, rocket_alt_list, rocket_vel_list, rocket_acc_list = [], [], [], []
+        parachute_alt_list, parachute_vel_list, parachute_acc_list, tension_list = [], [], [], []
 
-        # Initial conditions
-        initial_velocity = 0  # m/s (initial velocity at apogee)
-        initial_height = 9000  # m (initial height at apogee)
-        mass = mass_initial  # Initial mass
+        t = 0.0
+        y_r = apogee
+        v_r = 0.0
 
-        # Time array for simulation
-        time_array = np.arange(0, total_time, time_step)
+        while t < deploy_delay and y_r > 0:
+            a_r = g
+            time_list.append(t)
+            rocket_alt_list.append(y_r)
+            rocket_vel_list.append(v_r)
+            rocket_acc_list.append(a_r)
+            parachute_alt_list.append(np.nan)
+            parachute_vel_list.append(np.nan)
+            parachute_acc_list.append(np.nan)
+            tension_list.append(0.0)
 
-        # Arrays to store results
-        velocity_array = np.zeros_like(time_array)
-        height_array = np.zeros_like(time_array)
-        drag_force_array = np.zeros_like(time_array)
-        shock_load_array = np.zeros_like(time_array)
-        mass_array = np.zeros_like(time_array)
+            v_r += a_r * dt
+            y_r -= v_r * dt
+            t += dt
 
-        # Initial values
-        velocity_array[0] = initial_velocity
-        height_array[0] = initial_height
-        mass_array[0] = mass
+        y_p = y_r + L0
+        v_p = v_r
 
-        # Simulation loop
-        for i in range(1, len(time_array)):
-            t = time_array[i]
-            if t < reefed_duration:
-                Cd = reefed_drag_coefficient
-                A = reefed_area
+        while y_r > 2200:
+            if t < deploy_delay:
+                A_eff = 0.0
+            elif deploy_delay <= t < deploy_delay + t_reefed:
+                A_eff = A_partial * ((t - deploy_delay) / t_reefed)
+                Cd = Cd_partial
+            elif deploy_delay + t_reefed <= t < deploy_delay + t_reefed + t_disreef:
+                A_eff = A_partial + (A_chute - A_partial) * ((t - (deploy_delay + t_reefed)) / t_disreef)
+                Cd = Cd_partial + (Cd_chute - Cd_partial) * ((t - (deploy_delay + t_reefed)) / t_disreef)
             else:
-                Cd = drag_coefficient_full
-                A = parachute_area_full
+                A_eff = A_chute
+                Cd = Cd_chute
 
-            # Calculate height
-            height_array[i] = height_array[i-1] - velocity_array[i-1] * time_step
+            d = y_p - y_r
+            T = k * (d - L0) if d > L0 else 0.0
 
-            # Calculate air density at current height using ISA model
-            rho = air_density_isa(height_array[i])
+            a_r = g - T / mass
+            drag = 0.5 * rho * Cd * A_eff * (v_p**2)
+            a_p = g + T / m_p - drag / m_p
 
-            # Calculate drag force
-            drag_force_array[i] = drag_force(velocity_array[i-1], Cd, A, rho=rho)
+            time_list.append(t)
+            rocket_alt_list.append(y_r)
+            rocket_vel_list.append(v_r)
+            rocket_acc_list.append(a_r)
+            parachute_alt_list.append(y_p)
+            parachute_vel_list.append(v_p)
+            parachute_acc_list.append(a_p)
+            tension_list.append(T)
 
-            # Calculate acceleration
-            acceleration = g - (drag_force_array[i] / mass)
+            v_r += a_r * dt
+            y_r -= v_r * dt
+            v_p += a_p * dt
+            y_p -= v_p * dt
+            t += dt
 
-            # Calculate velocity
-            velocity_array[i] = velocity_array[i-1] + acceleration * time_step
+        time_arr = np.array(time_list)
+        rocket_alt = np.array(rocket_alt_list)
+        rocket_vel = np.array(rocket_vel_list)
+        rocket_acc = np.array(rocket_acc_list)
+        parachute_alt = np.array(parachute_alt_list)
+        parachute_vel = np.array(parachute_vel_list)
+        parachute_acc = np.array(parachute_acc_list)
+        tension = np.array(tension_list)
 
-            # Update mass (example: linear decrease over time)
-            mass = mass_initial * (1 - t / total_time)
-            mass_array[i] = mass
+        plt.figure(figsize=(10, 8))
 
-            # Calculate shock load on the shock cord
-            shock_load_array[i] = cord_stretch_damped(drag_force_array[i], cord_length, cord_cross_sectional_area, cord_modulus_of_elasticity, 100, velocity_array[i])
+        ax1 = plt.subplot(4, 1, 1)
+        ax1.plot(time_arr, rocket_alt, color='xkcd:dark blue', label="Rocket")
+        ax1.plot(time_arr, parachute_alt, color='xkcd:red', label="Parachute", linestyle=":")
+        ax1.set_ylabel("Altitude (m)")
+        ax1.legend()
+        ax1.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.4)
+        ax1.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
+        ax1.minorticks_on()
+        ax1.tick_params(which='both', direction='in', top=True, right=True)
 
-        # Plot results
-        fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
+        ax2 = plt.subplot(4, 1, 2)
+        ax2.plot(time_arr, rocket_vel, color='xkcd:dark blue', label="Rocket")
+        ax2.plot(time_arr, parachute_vel, color='xkcd:red', label="Parachute", linestyle=":")
+        ax2.set_ylabel("Velocity (m/s)")
+        ax2.legend()
+        ax2.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.4)
+        ax2.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
+        ax2.minorticks_on()
+        ax2.tick_params(which='both', direction='in', top=True, right=True)
 
-        plt.plot(time_array, shock_load_array, color='xkcd:dark blue')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Shock Load (N)')
+        ax3 = plt.subplot(4, 1, 3)
+        ax3.plot(time_arr, rocket_acc, color='xkcd:dark blue', label="Rocket")
+        ax3.plot(time_arr, parachute_acc, color='xkcd:red', label="Parachute", linestyle=":")
+        ax3.set_ylabel("Acceleration (m/s²)")
+        ax3.legend()
+        ax3.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.4)
+        ax3.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
+        ax3.minorticks_on()
+        ax3.tick_params(which='both', direction='in', top=True, right=True)
 
-        # Add gridlines and ticks
-        ax.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.6)
-        ax.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
-        ax.minorticks_on()
-        ax.tick_params(which='both', direction='in', top=True, right=True)
+        ax4 = plt.subplot(4, 1, 4)
+        ax4.plot(time_arr, tension, color='xkcd:dark blue')
+        ax4.set_ylabel("Tension (N)")
+        ax4.set_xlabel("Time (s)")
+        ax4.grid(which='major', color='xkcd:dark blue', alpha=0.2, linewidth=0.4)
+        ax4.grid(which='minor', color='xkcd:dark blue', alpha=0.1, linewidth=0.2)
+        ax4.minorticks_on()
+        ax4.tick_params(which='both', direction='in', top=True, right=True)
 
+        plt.tight_layout()
         plt.show()
+
+        messagebox.showinfo("Simulation Complete", f"Maximum tension force: {np.max(tension):.2f} N") #\nFor safety factor of {safety_factor}: {np.max(tension_sf):.2f} N")
 
     except ValueError:
         messagebox.showerror("Invalid input", "Please enter valid numeric values for all fields.")
 
-# --- UI Setup ---
-
 root = tk.Tk()
-root.title("Shock Load Analysis")
+root.title("Parachute Deployment Simulation")
 
-# Input and Output Fields in Aligned Layout
-inputs_outputs = [
-    ("Rocket Mass (kg)", "55.0", None, None),
-    ("Horizontal Speed at Apogee (m/s)", "0", None, None),
-    ("Full Parachute Diameter (m)", "6.5", None, None),
-    ("Reefed Parachute Diameter (m)", "1.6", None, None),
-    ("Drag Coefficient (Full)", "2.2", None, None),
-    ("Drag Coefficient (Reefed)", "2.0", None, None),
-    ("Reefed Duration (s)", "5", None, None),
-    ("Reefed Deployment Time (s)", "5", None, None),
-    ("Full Deployment Time (s)", "2", None, None),
-    ("Shock Cord Length (m)", "2.5", None, None),
-    ("Shock Cord Diameter (m)", "0.01", None, None),
-    ("Cord Yield Strength (Pa)", "5e8", None, None),
-    ("Cord Elastic Modulus (Pa)", "4.7625e+03", None, None),
-    ("Safety Factor", "2.0", None, None),
+inputs = [
+    ("Apogee (m)", "3000.0"),
+    ("Rocket Mass (kg)", "55.0"),
+    ("Parachute Mass (kg)", "1.0"),
+    ("Deployment Delay (s)", "3.0"),
+    ("Reefed Inflation Duration (s)", "0.5"),
+    ("Disreef Inflation Duration (s)", "1.0"),
+    ("Time Step (s)", "0.001"),
+    ("Drag Coefficient (Full)", "2.2"),
+    ("Drag Coefficient (Partial)", "1.9"),
+    ("Parachute Diameter (m)", "3.0"),
+    ("Partial Parachute Diameter (m)", "2.0"),
+    ("Spring Constant (N/m)", "500.0"),
+    ("Unstretched Cord Length (m)", "10.0"),
 ]
 
-# Create input and output fields in aligned layout
 entry_vars = {}
-for i, (label_text, default_value, output_label, result_var) in enumerate(inputs_outputs):
-    # Left Column: Input Label and Entry
+for i, (label_text, default_value) in enumerate(inputs):
     ttk.Label(root, text=label_text).grid(row=i, column=0, padx=5, pady=2, sticky="w")
     entry = ttk.Entry(root)
     entry.insert(0, default_value)
     entry.grid(row=i, column=1, padx=5, pady=2)
     entry_vars[label_text] = entry
 
-# Reference input fields for calculation
+entry_apogee = entry_vars["Apogee (m)"]
 entry_mass = entry_vars["Rocket Mass (kg)"]
-entry_horizontal_speed = entry_vars["Horizontal Speed at Apogee (m/s)"]
-entry_diameter_full = entry_vars["Full Parachute Diameter (m)"]
-entry_reefed_diameter = entry_vars["Reefed Parachute Diameter (m)"]
-entry_drag_full = entry_vars["Drag Coefficient (Full)"]
-entry_drag_reefed = entry_vars["Drag Coefficient (Reefed)"]
-entry_reefed_duration = entry_vars["Reefed Duration (s)"]
-entry_deployment_time = entry_vars["Reefed Deployment Time (s)"]
-entry_full_deployment_time = entry_vars["Full Deployment Time (s)"]
-entry_cord_length = entry_vars["Shock Cord Length (m)"]
-entry_cord_diameter = entry_vars["Shock Cord Diameter (m)"]
-entry_cord_yield_strength = entry_vars["Cord Yield Strength (Pa)"]
-entry_cord_modulus = entry_vars["Cord Elastic Modulus (Pa)"]
-entry_safety_factor = entry_vars["Safety Factor"]
+entry_parachute_mass = entry_vars["Parachute Mass (kg)"]
+entry_deploy_delay = entry_vars["Deployment Delay (s)"]
+entry_t_reefed = entry_vars["Reefed Inflation Duration (s)"]
+entry_t_disreef = entry_vars["Disreef Inflation Duration (s)"]
+entry_dt = entry_vars["Time Step (s)"]
+entry_Cd_chute = entry_vars["Drag Coefficient (Full)"]
+entry_Cd_partial = entry_vars["Drag Coefficient (Partial)"]
+entry_diameter_chute = entry_vars["Parachute Diameter (m)"]
+entry_diameter_partial = entry_vars["Partial Parachute Diameter (m)"]
+entry_k = entry_vars["Spring Constant (N/m)"]
+entry_L0 = entry_vars["Unstretched Cord Length (m)"]
 
-# Calculate Button
-calculate_button = ttk.Button(root, text="Calculate", command=calculate_and_display)
-calculate_button.grid(row=len(inputs_outputs), column=1, pady=10)
+calculate_button = ttk.Button(root, text="Simulate", command=simulate)
+calculate_button.grid(row=len(inputs), column=1, pady=10)
 
 root.mainloop()
-
